@@ -55,10 +55,9 @@ export class RunAggregator {
   private hasReasoningPart = false;
   private textPartCounter = 0;
 
-  private _streamStartTime = 0;
+  private _streamStartTime: number | undefined;
   private _firstTokenTime: number | undefined;
   private _totalChunks = 0;
-  private readonly _toolCallIds = new Set<string>();
 
   constructor(options: RunAggregatorOptions) {
     this.emitUpdate = options.emit;
@@ -80,7 +79,6 @@ export class RunAggregator {
         this._streamStartTime = Date.now();
         this._firstTokenTime = undefined;
         this._totalChunks = 0;
-        this._toolCallIds.clear();
         this.status = { type: "running" };
         this.emit();
         break;
@@ -164,9 +162,6 @@ export class RunAggregator {
           event.toolCallName,
           event.parentMessageId,
         );
-        if (event.toolCallId) {
-          this._toolCallIds.add(event.toolCallId);
-        }
         this.emit();
         break;
       }
@@ -388,7 +383,7 @@ export class RunAggregator {
   }
 
   private getTiming(): MessageTiming | undefined {
-    if (!this._streamStartTime) return undefined;
+    if (this._streamStartTime === undefined) return undefined;
 
     const now = Date.now();
     const totalStreamTime = now - this._streamStartTime;
@@ -415,7 +410,7 @@ export class RunAggregator {
       ...(tokenCount !== undefined ? { tokenCount } : {}),
       ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
       totalChunks: this._totalChunks,
-      toolCallCount: this._toolCallIds.size,
+      toolCallCount: this.toolCalls.size,
     };
   }
 

@@ -41,6 +41,7 @@ function makeMockAdapter(delayMs: number): ChatModelAdapter {
       const startTime = Date.now();
       const tokens: string[] = [];
       let i = 0;
+      let nextChunkDeadline = startTime;
 
       while (i < text.length) {
         if (abortSignal?.aborted) break;
@@ -57,9 +58,8 @@ function makeMockAdapter(delayMs: number): ChatModelAdapter {
           content: [{ type: "text" as const, text: tokens.join("") }],
         };
 
-        const now = Date.now();
-        const elapsed = now - startTime;
-        const wait = delayMs + Math.random() * delayMs * 0.5 - elapsed;
+        nextChunkDeadline += delayMs + Math.random() * delayMs * 0.5;
+        const wait = nextChunkDeadline - Date.now();
         if (wait > 0) {
           yield* (async function* () {
             await new Promise((r) => setTimeout(r, wait));

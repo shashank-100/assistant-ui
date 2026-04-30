@@ -12,33 +12,31 @@ type TrackingState = {
   totalChunks: number;
 };
 
-function getAssistantTextLength(state: OpenCodeThreadState): number {
+function getMessageTextLength(
+  state: OpenCodeThreadState,
+  messageId: string,
+): number {
+  const message = state.messagesById[messageId];
+  if (!message?.info || message.info.role !== "assistant") return 0;
   let len = 0;
-  for (const messageId of state.messageOrder) {
-    const message = state.messagesById[messageId];
-    if (!message?.info || message.info.role !== "assistant") continue;
-    for (const part of message.parts) {
-      if (part.type === "text" && typeof part.text === "string") {
-        len += part.text.length;
-      }
-      if (part.type === "reasoning" && typeof part.text === "string") {
-        len += part.text.length;
-      }
+  for (const part of message.parts) {
+    if (
+      (part.type === "text" || part.type === "reasoning") &&
+      typeof part.text === "string"
+    ) {
+      len += part.text.length;
     }
   }
   return len;
 }
 
-function getAssistantToolCallCount(state: OpenCodeThreadState): number {
-  let count = 0;
-  for (const messageId of state.messageOrder) {
-    const message = state.messagesById[messageId];
-    if (!message?.info || message.info.role !== "assistant") continue;
-    for (const part of message.parts) {
-      if (part.type === "tool") count++;
-    }
-  }
-  return count;
+function getMessageToolCallCount(
+  state: OpenCodeThreadState,
+  messageId: string,
+): number {
+  const message = state.messagesById[messageId];
+  if (!message?.info || message.info.role !== "assistant") return 0;
+  return message.parts.filter((p) => p.type === "tool").length;
 }
 
 function getLastAssistantId(state: OpenCodeThreadState): string | undefined {
@@ -74,7 +72,7 @@ export const useOpenCodeStreamingTiming = (
       }
 
       const t = trackRef.current;
-      const len = getAssistantTextLength(state);
+      const len = getMessageTextLength(state, t.messageId);
       if (len > t.lastContentLength) {
         if (t.firstTokenTime === undefined) {
           t.firstTokenTime = Date.now() - t.startTime;
@@ -86,7 +84,7 @@ export const useOpenCodeStreamingTiming = (
       const t = trackRef.current;
       const totalStreamTime = Date.now() - t.startTime;
       const tokenCount = Math.ceil(t.lastContentLength / 4);
-      const toolCallCount = getAssistantToolCallCount(state);
+      const toolCallCount = getMessageToolCallCount(state, t.messageId);
 
       const timing: MessageTiming = {
         streamStartTime: t.startTime,

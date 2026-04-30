@@ -132,6 +132,13 @@ const useOpenCodeControllerState = (
   );
 };
 
+const isOpenCodeStateRunning = (state: OpenCodeThreadState): boolean =>
+  state.runState.type === "streaming" ||
+  state.runState.type === "cancelling" ||
+  state.runState.type === "reverting" ||
+  state.sessionStatus?.type === "busy" ||
+  state.sessionStatus?.type === "retry";
+
 const useOpenCodeThreadRuntime = (
   controller: OpenCodeThreadControllerLike,
   options: OpenCodeRuntimeOptions,
@@ -150,12 +157,7 @@ const useOpenCodeThreadRuntime = (
   }, [controller]);
 
   // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
-  const isRunning =
-    state.runState.type === "streaming" ||
-    state.runState.type === "cancelling" ||
-    state.runState.type === "reverting" ||
-    state.sessionStatus?.type === "busy" ||
-    state.sessionStatus?.type === "retry";
+  const isRunning = isOpenCodeStateRunning(state);
 
   // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
   const messageTiming = useOpenCodeStreamingTiming(state, isRunning);
@@ -197,12 +199,7 @@ const useOpenCodeThreadRuntime = (
   // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
   return useExternalStoreRuntime<ThreadMessage>({
     isLoading: state.loadState.type === "loading",
-    isRunning:
-      state.runState.type === "streaming" ||
-      state.runState.type === "cancelling" ||
-      state.runState.type === "reverting" ||
-      state.sessionStatus?.type === "busy" ||
-      state.sessionStatus?.type === "retry",
+    isRunning: isOpenCodeStateRunning(state),
     messageRepository,
     extras,
     onNew: async (message: any) => {

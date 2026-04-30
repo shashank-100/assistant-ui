@@ -12,37 +12,31 @@ type TrackingState = {
   totalChunks: number;
 };
 
-function getAssistantTextLength(messages: readonly LangChainMessage[]): number {
+function getMessageTextLength(
+  messages: readonly LangChainMessage[],
+  messageId: string,
+): number {
+  const m = messages.find((msg) => msg.type === "ai" && msg.id === messageId);
+  if (!m) return 0;
+  const content = m.content;
+  if (typeof content === "string") return content.length;
+  if (!Array.isArray(content)) return 0;
   let len = 0;
-  for (const m of messages) {
-    if (m.type !== "ai") continue;
-    const content = m.content;
-    if (typeof content === "string") {
-      len += content.length;
-    } else if (Array.isArray(content)) {
-      for (const part of content) {
-        if ("text" in part && typeof part.text === "string") {
-          len += part.text.length;
-        }
-        if ("thinking" in part && typeof part.thinking === "string") {
-          len += part.thinking.length;
-        }
-      }
-    }
+  for (const part of content) {
+    if ("text" in part && typeof part.text === "string")
+      len += part.text.length;
+    if ("thinking" in part && typeof part.thinking === "string")
+      len += part.thinking.length;
   }
   return len;
 }
 
-function getAssistantToolCallCount(
+function getMessageToolCallCount(
   messages: readonly LangChainMessage[],
+  messageId: string,
 ): number {
-  let count = 0;
-  for (const m of messages) {
-    if (m.type !== "ai") continue;
-    const toolCalls = m.tool_calls;
-    if (toolCalls) count += toolCalls.length;
-  }
-  return count;
+  const m = messages.find((msg) => msg.type === "ai" && msg.id === messageId);
+  return m?.tool_calls?.length ?? 0;
 }
 
 function getLastAssistantId(
@@ -77,7 +71,7 @@ export const useLangGraphStreamingTiming = (
       }
 
       const t = trackRef.current;
-      const len = getAssistantTextLength(messages);
+      const len = getMessageTextLength(messages, t.messageId);
       if (len > t.lastContentLength) {
         if (t.firstTokenTime === undefined) {
           t.firstTokenTime = Date.now() - t.startTime;
@@ -89,7 +83,7 @@ export const useLangGraphStreamingTiming = (
       const t = trackRef.current;
       const totalStreamTime = Date.now() - t.startTime;
       const tokenCount = Math.ceil(t.lastContentLength / 4);
-      const toolCallCount = getAssistantToolCallCount(messages);
+      const toolCallCount = getMessageToolCallCount(messages, t.messageId);
 
       const timing: MessageTiming = {
         streamStartTime: t.startTime,

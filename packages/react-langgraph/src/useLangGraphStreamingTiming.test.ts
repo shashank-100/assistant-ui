@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { LangChainMessage } from "./types";
 import { useLangGraphStreamingTiming } from "./useLangGraphStreamingTiming";
@@ -6,6 +6,10 @@ import { useLangGraphStreamingTiming } from "./useLangGraphStreamingTiming";
 describe("useLangGraphStreamingTiming", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns empty object when not running", () => {
