@@ -2,6 +2,7 @@
 
 import type {
   ChatModelRunResult,
+  MessageTiming,
   ThreadAssistantMessagePart,
   ToolCallMessagePart,
 } from "@assistant-ui/core";
@@ -54,6 +55,11 @@ export class RunAggregator {
   private hasReasoningPart = false;
   private textPartCounter = 0;
 
+  private _streamStartTime = 0;
+  private _firstTokenTime: number | undefined;
+  private _totalChunks = 0;
+  private readonly _toolCallIds = new Set<string>();
+
   constructor(options: RunAggregatorOptions) {
     this.emitUpdate = options.emit;
     this.showThinking = options.showThinking;
@@ -71,6 +77,10 @@ export class RunAggregator {
         this.hasReasoningPart = false;
         this.textPartCounter = 0;
         this.activeTextMessageId = undefined;
+        this._streamStartTime = Date.now();
+        this._firstTokenTime = undefined;
+        this._totalChunks = 0;
+        this._toolCallIds.clear();
         this.status = { type: "running" };
         this.emit();
         break;
@@ -112,10 +122,12 @@ export class RunAggregator {
       case "TEXT_MESSAGE_CONTENT":
       case "TEXT_MESSAGE_CHUNK": {
         if (!event.delta) break;
+        this.recordFirstToken();
         const id = this.resolveTextMessageId(
           "messageId" in event ? event.messageId : undefined,
         );
         this.appendText(id, event.delta);
+        this._totalChunks++;
         this.emit();
         break;
       }
@@ -136,6 +148,8 @@ export class RunAggregator {
       case "THINKING_TEXT_MESSAGE_CONTENT":
       case "REASONING_MESSAGE_CONTENT":
         this.handleReasoningContent(event.delta);
+        this._totalChunks++;
+        this.recordFirstToken();
         break;
       case "THINKING_TEXT_MESSAGE_END":
       case "THINKING_END":
@@ -150,6 +164,9 @@ export class RunAggregator {
           event.toolCallName,
           event.parentMessageId,
         );
+        if (event.toolCallId) {
+          this._toolCallIds.add(event.toolCallId);
+        }
         this.emit();
         break;
       }
@@ -355,11 +372,51 @@ export class RunAggregator {
       snapshot.push(toolPart);
     }
 
+    const timing = this.getTiming();
     const result: ChatModelRunResult = {
       content: snapshot,
       ...(this.status ? { status: this.status } : undefined),
+      ...(timing ? { metadata: { timing } } : undefined),
     };
     this.emitUpdate(result);
+  }
+
+  private recordFirstToken(): void {
+    if (this._firstTokenTime === undefined) {
+      this._firstTokenTime = Date.now() - this._streamStartTime;
+    }
+  }
+
+  private getTiming(): MessageTiming | undefined {
+    if (!this._streamStartTime) return undefined;
+
+    const now = Date.now();
+    const totalStreamTime = now - this._streamStartTime;
+    const tokenCount =
+      this._totalChunks > 0
+        ? Math.ceil(
+            Array.from(this.textParts.values()).reduce(
+              (sum, p) => sum + p.buffer.length,
+              0,
+            ) / 4,
+          )
+        : undefined;
+    const tokensPerSecond =
+      tokenCount && totalStreamTime > 0
+        ? (tokenCount / totalStreamTime) * 1000
+        : undefined;
+
+    return {
+      streamStartTime: this._streamStartTime,
+      ...(this._firstTokenTime !== undefined
+        ? { firstTokenTime: this._firstTokenTime }
+        : {}),
+      totalStreamTime,
+      ...(tokenCount !== undefined ? { tokenCount } : {}),
+      ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
+      totalChunks: this._totalChunks,
+      toolCallCount: this._toolCallIds.size,
+    };
   }
 
   private handleReasoningStart(): void {

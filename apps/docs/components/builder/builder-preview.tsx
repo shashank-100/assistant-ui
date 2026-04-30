@@ -29,6 +29,7 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   useMessagePartText,
+  useMessageTiming,
 } from "@assistant-ui/react";
 
 import {
@@ -692,8 +693,9 @@ const AssistantMessage: FC<AssistantMessageProps> = ({ config }) => {
             </div>
           )}
 
-          <div className="aui-assistant-message-footer flex min-h-6 items-center">
+          <div className="aui-assistant-message-footer flex min-h-6 items-center gap-2">
             {components.branchPicker && <BranchPicker />}
+            <MessageTimingBadge />
             <AssistantActionBar config={config} />
           </div>
 
@@ -705,6 +707,38 @@ const AssistantMessage: FC<AssistantMessageProps> = ({ config }) => {
         </div>
       </div>
     </MessagePrimitive.Root>
+  );
+};
+
+const MessageTimingBadge: FC = () => {
+  const timing = useMessageTiming();
+  if (!timing?.totalStreamTime) return null;
+
+  const formatMs = (ms: number) =>
+    ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-mono text-xs"
+      style={{
+        color: "var(--aui-muted-foreground)",
+        backgroundColor: "var(--aui-muted)",
+      }}
+    >
+      <span>{formatMs(timing.totalStreamTime)}</span>
+      {timing.tokensPerSecond != null && (
+        <>
+          <span className="opacity-50">·</span>
+          <span>{timing.tokensPerSecond.toFixed(1)} tok/s</span>
+        </>
+      )}
+      {timing.firstTokenTime != null && (
+        <>
+          <span className="opacity-50">·</span>
+          <span>TTFT {Math.round(timing.firstTokenTime)}ms</span>
+        </>
+      )}
+    </div>
   );
 };
 

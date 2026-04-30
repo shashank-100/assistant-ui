@@ -27,6 +27,7 @@ import { OpenCodeEventSource } from "./OpenCodeEventSource";
 import { OpenCodeThreadController } from "./OpenCodeThreadController";
 import { projectOpenCodeThreadRepository } from "./openCodeMessageProjection";
 import { createOpenCodeThreadState } from "./openCodeThreadState";
+import { useOpenCodeStreamingTiming } from "./useOpenCodeStreamingTiming";
 
 type OpenCodeControllerRegistry = {
   eventSource: OpenCodeEventSource;
@@ -149,9 +150,20 @@ const useOpenCodeThreadRuntime = (
   }, [controller]);
 
   // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
+  const isRunning =
+    state.runState.type === "streaming" ||
+    state.runState.type === "cancelling" ||
+    state.runState.type === "reverting" ||
+    state.sessionStatus?.type === "busy" ||
+    state.sessionStatus?.type === "retry";
+
+  // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
+  const messageTiming = useOpenCodeStreamingTiming(state, isRunning);
+
+  // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
   const messageRepository = useMemo(
-    () => projectOpenCodeThreadRepository(state),
-    [state],
+    () => projectOpenCodeThreadRepository(state, messageTiming),
+    [state, messageTiming],
   );
 
   // biome-ignore lint/correctness/useHookAtTopLevel: intentional conditional/nested hook usage
