@@ -12,7 +12,7 @@ type TrackingState = {
   totalChunks: number;
 };
 
-function getMessageTextLength(
+export function getMessageTextLength(
   state: OpenCodeThreadState,
   messageId: string,
 ): number {
@@ -30,7 +30,7 @@ function getMessageTextLength(
   return len;
 }
 
-function getMessageToolCallCount(
+export function getMessageToolCallCount(
   state: OpenCodeThreadState,
   messageId: string,
 ): number {
@@ -39,7 +39,9 @@ function getMessageToolCallCount(
   return message.parts.filter((p) => p.type === "tool").length;
 }
 
-function getLastAssistantId(state: OpenCodeThreadState): string | undefined {
+export function getLastAssistantId(
+  state: OpenCodeThreadState,
+): string | undefined {
   for (let i = state.messageOrder.length - 1; i >= 0; i--) {
     const messageId = state.messageOrder[i];
     if (!messageId) continue;

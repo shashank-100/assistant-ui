@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import type { OpenCodeThreadState } from "./types";
-
-// Test the pure helpers by importing them indirectly via the module.
-// We expose them through a local re-export below to avoid making them public.
-import { useOpenCodeStreamingTiming } from "./useOpenCodeStreamingTiming";
+import {
+  getLastAssistantId,
+  getMessageTextLength,
+  getMessageToolCallCount,
+} from "./useOpenCodeStreamingTiming";
 
 function makeState(
   overrides: Partial<{
@@ -38,84 +39,103 @@ function msg(
   };
 }
 
-// The hook uses useEffect / useState so we test it via a minimal React
-// render loop using react-dom/server is not feasible without the testing
-// library. Instead we test the observable behaviour of the hook's output
-// by calling it through React's renderHook equivalent — we simulate the
-// state machine directly by unit-testing the logic it encodes.
-//
-// The integration is covered by the LangGraph timing tests which exercise
-// the identical state machine pattern.
-
-describe("useOpenCodeStreamingTiming (exported hook contract)", () => {
-  it("is a function that accepts state and isRunning and returns an object", () => {
-    expect(typeof useOpenCodeStreamingTiming).toBe("function");
-  });
-});
-
-describe("OpenCode timing state helpers (via makeState)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+describe("getLastAssistantId", () => {
+  it("returns undefined for empty state", () => {
+    expect(getLastAssistantId(makeState())).toBeUndefined();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("makeState produces a well-formed OpenCodeThreadState", () => {
+  it("returns the last assistant message id", () => {
     const state = makeState({
-      messageOrder: ["msg-1"],
+      messageOrder: ["a", "b"],
       messagesById: {
-        "msg-1": msg("msg-1", [{ type: "text", text: "hello" }]),
+        a: msg("a", [{ type: "text", text: "first" }]),
+        b: msg("b", [{ type: "text", text: "second" }]),
       },
     });
-    expect(state.messageOrder).toEqual(["msg-1"]);
-    expect(state.messagesById["msg-1"]?.info?.role).toBe("assistant");
+    expect(getLastAssistantId(state)).toBe("b");
   });
 
-  it("assistant message with text and reasoning parts is correctly structured", () => {
-    const m = msg("msg-1", [
-      { type: "text", text: "answer" },
-      { type: "reasoning", text: "thinking..." },
-      { type: "tool" },
-    ]);
-    const textParts = m.parts.filter(
-      (p: { type: string }) => p.type === "text" || p.type === "reasoning",
-    );
-    const toolParts = m.parts.filter(
-      (p: { type: string }) => p.type === "tool",
-    );
-    expect(textParts).toHaveLength(2);
-    expect(toolParts).toHaveLength(1);
+  it("skips message ids not present in messagesById", () => {
+    const state = makeState({
+      messageOrder: ["a", "ghost"],
+      messagesById: {
+        a: msg("a", [{ type: "text", text: "hi" }]),
+      },
+    });
+    expect(getLastAssistantId(state)).toBe("a");
   });
 
-  it("prior assistant messages do not bleed into active message id lookups", () => {
+  it("does not bleed from prior messages into active id lookup", () => {
     const state = makeState({
       messageOrder: ["prior", "active"],
       messagesById: {
-        prior: msg("prior", [{ type: "text", text: "prior content" }]),
+        prior: msg("prior", [{ type: "text", text: "old" }]),
         active: msg("active", [{ type: "text", text: "" }]),
       },
     });
+    expect(getLastAssistantId(state)).toBe("active");
+  });
+});
 
-    // getLastAssistantId logic: last entry in messageOrder with role=assistant
-    const lastId = [...state.messageOrder]
-      .reverse()
-      .find((id) => state.messagesById[id]?.info?.role === "assistant");
-    expect(lastId).toBe("active");
+describe("getMessageTextLength", () => {
+  it("returns 0 for unknown message", () => {
+    expect(getMessageTextLength(makeState(), "missing")).toBe(0);
+  });
 
-    // Content lookup for "active" should only return "active"'s text
-    const activeMsg = state.messagesById["active"];
-    const len = activeMsg?.parts
-      .filter(
-        (p: { type: string; text?: string }) =>
-          (p.type === "text" || p.type === "reasoning") &&
-          typeof p.text === "string",
-      )
-      .reduce(
-        (s: number, p: { text?: string }) => s + (p.text?.length ?? 0),
-        0,
-      );
-    expect(len).toBe(0); // empty, not inflated by prior message
+  it("sums text parts", () => {
+    const state = makeState({
+      messageOrder: ["m"],
+      messagesById: { m: msg("m", [{ type: "text", text: "hello" }]) },
+    });
+    expect(getMessageTextLength(state, "m")).toBe(5);
+  });
+
+  it("sums text and reasoning parts", () => {
+    const state = makeState({
+      messageOrder: ["m"],
+      messagesById: {
+        m: msg("m", [
+          { type: "text", text: "hello" },
+          { type: "reasoning", text: "think" },
+        ]),
+      },
+    });
+    expect(getMessageTextLength(state, "m")).toBe(10);
+  });
+
+  it("ignores tool parts", () => {
+    const state = makeState({
+      messageOrder: ["m"],
+      messagesById: { m: msg("m", [{ type: "tool" }]) },
+    });
+    expect(getMessageTextLength(state, "m")).toBe(0);
+  });
+});
+
+describe("getMessageToolCallCount", () => {
+  it("returns 0 for unknown message", () => {
+    expect(getMessageToolCallCount(makeState(), "missing")).toBe(0);
+  });
+
+  it("counts tool parts", () => {
+    const state = makeState({
+      messageOrder: ["m"],
+      messagesById: {
+        m: msg("m", [
+          { type: "text", text: "result" },
+          { type: "tool" },
+          { type: "tool" },
+        ]),
+      },
+    });
+    expect(getMessageToolCallCount(state, "m")).toBe(2);
+  });
+
+  it("returns 0 when no tool parts", () => {
+    const state = makeState({
+      messageOrder: ["m"],
+      messagesById: { m: msg("m", [{ type: "text", text: "hi" }]) },
+    });
+    expect(getMessageToolCallCount(state, "m")).toBe(0);
   });
 });
