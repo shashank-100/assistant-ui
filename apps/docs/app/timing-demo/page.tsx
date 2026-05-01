@@ -25,17 +25,8 @@ let responseIndex = 0;
 
 function makeMockAdapter(delayMs: number): ChatModelAdapter {
   return {
-    run: function* ({
-      messages,
-      abortSignal,
-    }: ChatModelRunOptions): AsyncGenerator<
-      Awaited<ReturnType<ChatModelAdapter["run"]>> extends AsyncIterable<
-        infer T
-      >
-        ? T
-        : never
-    > {
-      const text = MOCK_RESPONSES[responseIndex % MOCK_RESPONSES.length];
+    async *run({ messages, abortSignal }: ChatModelRunOptions) {
+      const text = MOCK_RESPONSES[responseIndex % MOCK_RESPONSES.length] ?? "";
       responseIndex++;
 
       const startTime = Date.now();
@@ -61,16 +52,14 @@ function makeMockAdapter(delayMs: number): ChatModelAdapter {
         nextChunkDeadline += delayMs + Math.random() * delayMs * 0.5;
         const wait = nextChunkDeadline - Date.now();
         if (wait > 0) {
-          yield* (async function* () {
-            await new Promise((r) => setTimeout(r, wait));
-          })() as never;
+          await new Promise((r) => setTimeout(r, wait));
         }
       }
 
       const totalStreamTime = Date.now() - startTime;
       const totalTokens = Math.ceil(text.length / 4);
 
-      return {
+      yield {
         content: [{ type: "text" as const, text }],
         metadata: {
           usage: {
@@ -135,7 +124,7 @@ const AssistantMessage: FC = () => (
     <div className="min-w-0 flex-1">
       <div className="text-sm text-zinc-800 leading-relaxed dark:text-zinc-200">
         <MessagePrimitive.Parts />
-        <MessagePrimitive.If condition={(m) => m.content.length === 0}>
+        <MessagePrimitive.If hasContent={false}>
           <div className="flex items-center gap-2 text-zinc-400">
             <Loader2 className="size-4 animate-spin" />
             <span className="text-xs">Thinking...</span>
@@ -210,12 +199,12 @@ export default function TimingDemoPage() {
                   className="min-h-6 w-full resize-none bg-transparent text-sm outline-none placeholder:text-zinc-400"
                   rows={1}
                 />
-                <ThreadPrimitive.If condition={(s) => !s.thread.isRunning}>
+                <ThreadPrimitive.If running={false}>
                   <ComposerPrimitive.Send className="rounded-md p-1 text-zinc-400 transition-colors hover:text-zinc-700">
                     <SendHorizontal className="size-4" />
                   </ComposerPrimitive.Send>
                 </ThreadPrimitive.If>
-                <ThreadPrimitive.If condition={(s) => s.thread.isRunning}>
+                <ThreadPrimitive.If running={true}>
                   <ComposerPrimitive.Cancel className="rounded-md p-1 text-zinc-400 transition-colors hover:text-zinc-700">
                     <Square className="size-3.5 fill-current" />
                   </ComposerPrimitive.Cancel>
