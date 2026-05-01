@@ -36,7 +36,8 @@ function getMessageToolCallCount(
   messageId: string,
 ): number {
   const m = messages.find((msg) => msg.type === "ai" && msg.id === messageId);
-  return m?.tool_calls?.length ?? 0;
+  if (!m || m.type !== "ai") return 0;
+  return m.tool_calls?.length ?? 0;
 }
 
 function getLastAssistantId(

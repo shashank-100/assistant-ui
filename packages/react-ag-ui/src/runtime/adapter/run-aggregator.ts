@@ -377,7 +377,10 @@ export class RunAggregator {
   }
 
   private recordFirstToken(): void {
-    if (this._firstTokenTime === undefined) {
+    if (
+      this._firstTokenTime === undefined &&
+      this._streamStartTime !== undefined
+    ) {
       this._firstTokenTime = Date.now() - this._streamStartTime;
     }
   }
