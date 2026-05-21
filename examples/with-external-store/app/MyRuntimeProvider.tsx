@@ -1,47 +1,61 @@
 "use client";
 
+import type React from "react";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { AppendMessage } from "@assistant-ui/react";
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
+  ExportedMessageRepository,
 } from "@assistant-ui/react";
-import { useState } from "react";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
 };
+
+const INITIAL_REPOSITORY = ExportedMessageRepository.fromBranchableArray([
+  {
+    parentId: null,
+    message: {
+      id: "user-1",
+      role: "user",
+      content: [{ type: "text", text: "What is the capital of France?" }],
+    },
+  },
+  {
+    parentId: "user-1",
+    message: {
+      id: "assistant-1a",
+      role: "assistant",
+      content: [{ type: "text", text: "The capital of France is Paris." }],
+    },
+  },
+  {
+    parentId: "user-1",
+    message: {
+      id: "assistant-1b",
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: "Paris is the capital and largest city of France.",
+        },
+      ],
+    },
+  },
+]);
 
 export function MyRuntimeProvider({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [messages, setMessages] = useState<readonly ThreadMessageLike[]>([]);
-
-  const onNew = async (message: AppendMessage) => {
-    if (message.content.length !== 1 || message.content[0]?.type !== "text")
-      throw new Error("Only text content is supported");
-
-    const userMessage: ThreadMessageLike = {
-      role: "user",
-      content: [{ type: "text", text: message.content[0].text }],
-    };
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
-
-    // normally you would perform an API call here to get the assistant response
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const assistantMessage: ThreadMessageLike = {
-      role: "assistant",
-      content: [{ type: "text", text: "Hello, world!" }],
-    };
-    setMessages((currentMessages) => [...currentMessages, assistantMessage]);
+  const onNew = async (_message: AppendMessage) => {
+    // no-op for testing
   };
 
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
-    messages,
-    setMessages,
+    messageRepository: INITIAL_REPOSITORY,
     onNew,
     convertMessage,
   });

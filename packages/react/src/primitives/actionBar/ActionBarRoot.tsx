@@ -6,7 +6,9 @@ import {
   forwardRef,
   type ComponentPropsWithoutRef,
   useCallback,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -94,6 +96,24 @@ export const ActionBarPrimitiveRoot = forwardRef<
     forceVisible: interactionCount > 0,
   });
 
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Rescue keyboard focus before the subtree is removed. useLayoutEffect cleanup
+  // runs synchronously before React flushes DOM removals, so the active element
+  // is still reachable here. We walk up to find the nearest focusable ancestor
+  // of the action bar so focus lands somewhere useful rather than <body>.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    return () => {
+      if (!root.contains(document.activeElement)) return;
+      const ancestor = root.parentElement?.closest<HTMLElement>(
+        '[tabindex], button, a, input, [role="article"], [role="main"]',
+      );
+      (ancestor ?? document.body).focus();
+    };
+  }, []);
+
   if (hideAndfloatStatus === HideAndFloatStatus.Hidden) return null;
 
   return (
@@ -103,7 +123,11 @@ export const ActionBarPrimitiveRoot = forwardRef<
           ? { "data-floating": "true" }
           : null)}
         {...rest}
-        ref={ref}
+        ref={(node) => {
+          rootRef.current = node;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
+        }}
       />
     </ActionBarInteractionContext.Provider>
   );
